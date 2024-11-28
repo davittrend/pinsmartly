@@ -20,7 +20,7 @@ export const handler: Handler = async (event) => {
   }
 
   if (!clientId || !clientSecret) {
-    console.error('Missing Pinterest credentials:', { clientId: !!clientId, clientSecret: !!clientSecret });
+    console.error('Missing Pinterest credentials');
     return {
       statusCode: 500,
       headers,
@@ -35,7 +35,6 @@ export const handler: Handler = async (event) => {
       case '/oauth/url': {
         const scope = 'boards:read,pins:read,pins:write,user_accounts:read,boards:write';
         const authUrl = `https://www.pinterest.com/oauth/?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=sandbox`;
-        console.log('Generated auth URL:', { clientId, redirectUri });
         return { 
           statusCode: 200, 
           headers, 
