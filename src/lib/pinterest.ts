@@ -1,22 +1,19 @@
 import { auth } from './firebase';
 import type { PinterestBoard, PinterestToken, PinterestUser } from '@/types/pinterest';
 
-const PINTEREST_CONFIG = {
-  CLIENT_ID: '1507772',
-  REDIRECT_URI: typeof window !== 'undefined' 
-    ? `${window.location.origin}/callback`
-    : process.env.URL 
-      ? `${process.env.URL}/callback` 
-      : 'http://localhost:5173/callback'
-};
-
 export async function getPinterestAuthUrl() {
-  const response = await fetch('/.netlify/functions/pinterest?path=/oauth/url');
-  if (!response.ok) {
+  try {
+    const response = await fetch('/.netlify/functions/pinterest?path=/oauth/url');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to get Pinterest auth URL');
+    }
+    const data = await response.json();
+    return data.url;
+  } catch (error) {
+    console.error('Error getting Pinterest auth URL:', error);
     throw new Error('Failed to get Pinterest auth URL');
   }
-  const data = await response.json();
-  return data.url;
 }
 
 export async function exchangePinterestCode(code: string): Promise<{ token: PinterestToken; user: PinterestUser }> {
@@ -55,7 +52,7 @@ export async function refreshPinterestToken(refreshToken: string): Promise<Pinte
 export async function fetchPinterestBoards(accessToken: string): Promise<PinterestBoard[]> {
   const response = await fetch('/.netlify/functions/pinterest?path=/boards', {
     headers: {
-      'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`,
+      'Authorization': `Bearer ${accessToken}`,
     },
   });
 
