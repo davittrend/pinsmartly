@@ -7,5 +7,14 @@
   to = "/index.html"
   status = 200
 
+[functions]
+  node_bundler = "esbuild"
+
 [build.environment]
-  SECRETS_SCAN_OMIT_PATHS = "dist/assets/*"
+  NODE_VERSION = "18"
+
+[dev]
+  command = "npm run dev"
+  targetPort = 5173
+  port = 8888
+  publish = "dist"
