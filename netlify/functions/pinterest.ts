@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions';
 
-const clientId = process.env.PINTEREST_CLIENT_ID || '1507772';
+const clientId = process.env.PINTEREST_CLIENT_ID;
 const clientSecret = process.env.PINTEREST_CLIENT_SECRET;
 const redirectUri = process.env.URL 
   ? `${process.env.URL}/callback`
@@ -20,6 +20,7 @@ export const handler: Handler = async (event) => {
   }
 
   if (!clientId || !clientSecret) {
+    console.error('Missing Pinterest credentials:', { clientId, clientSecret });
     return {
       statusCode: 500,
       headers,
@@ -67,6 +68,7 @@ export const handler: Handler = async (event) => {
         const tokenData = await tokenResponse.json();
         
         if (!tokenResponse.ok) {
+          console.error('Token exchange failed:', tokenData);
           throw new Error(tokenData.error_description || tokenData.error || 'Token exchange failed');
         }
 
@@ -78,6 +80,7 @@ export const handler: Handler = async (event) => {
           const userData = await userResponse.json();
           
           if (!userResponse.ok) {
+            console.error('User data fetch failed:', userData);
             throw new Error(userData.message || 'Failed to fetch user data');
           }
 
@@ -92,6 +95,32 @@ export const handler: Handler = async (event) => {
           statusCode: 200,
           headers,
           body: JSON.stringify({ token: tokenData }),
+        };
+      }
+
+      case '/boards': {
+        const { authorization } = event.headers;
+        if (!authorization) {
+          return {
+            statusCode: 401,
+            headers,
+            body: JSON.stringify({ error: 'Authorization required' })
+          };
+        }
+
+        const boardsResponse = await fetch(`${PINTEREST_API_URL}/boards`, {
+          headers: { 'Authorization': authorization },
+        });
+
+        if (!boardsResponse.ok) {
+          throw new Error('Failed to fetch boards');
+        }
+
+        const boardsData = await boardsResponse.json();
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify(boardsData)
         };
       }
 
