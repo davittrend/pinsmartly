@@ -1,10 +1,10 @@
 import { Handler } from '@netlify/functions';
 
 const clientId = process.env.PINTEREST_CLIENT_ID || '1507772';
-const clientSecret = process.env.PINTEREST_CLIENT_SECRET || '12e86e7dd050a39888c5e753908e80fae94f7367';
-const redirectUri = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:5173/callback'
-  : `${process.env.URL}/callback`;
+const clientSecret = process.env.PINTEREST_CLIENT_SECRET;
+const redirectUri = process.env.URL 
+  ? `${process.env.URL}/callback`
+  : 'http://localhost:5173/callback';
 
 const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
 
@@ -17,6 +17,14 @@ export const handler: Handler = async (event) => {
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers, body: '' };
+  }
+
+  if (!clientId || !clientSecret) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Pinterest configuration missing' })
+    };
   }
 
   const path = event.queryStringParameters?.path;
