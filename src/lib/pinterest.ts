@@ -6,74 +6,69 @@ const REDIRECT_URI = typeof window !== 'undefined'
   ? `${window.location.origin}/callback`
   : '';
 
-const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
-
 export async function getPinterestAuthUrl() {
   const scope = 'boards:read,pins:read,pins:write,user_accounts:read,boards:write';
-  const state = 'sandbox';
+  const state = crypto.randomUUID(); // Use unique state for security
   const redirectUri = encodeURIComponent(REDIRECT_URI);
   return `https://www.pinterest.com/oauth/?client_id=${CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
 }
 
 export async function exchangePinterestCode(code: string): Promise<{ token: PinterestToken; user: PinterestUser }> {
-  console.log('Exchanging code for token...');
-  const response = await fetch(`/.netlify/functions/pinterest?path=/token&code=${code}`, {
-    method: 'GET',
+  const response = await fetch('/.netlify/functions/pinterest', {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Origin': window.location.origin,
     },
+    body: JSON.stringify({
+      code,
+      redirectUri: REDIRECT_URI,
+    }),
   });
 
-  const data = await response.json();
-  
   if (!response.ok) {
-    console.error('Token exchange error:', data);
-    throw new Error(data.error || 'Failed to exchange Pinterest code');
+    const error = await response.json();
+    console.error('Token exchange error:', error);
+    throw new Error(error.message || 'Failed to exchange Pinterest code');
   }
 
-  return data;
+  return response.json();
 }
 
 export async function refreshPinterestToken(refreshToken: string): Promise<PinterestToken> {
-  console.log('Refreshing token...');
-  const response = await fetch(`/.netlify/functions/pinterest?path=/token&refresh_token=${refreshToken}`, {
-    method: 'GET',
+  const response = await fetch('/.netlify/functions/pinterest', {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Origin': window.location.origin,
     },
+    body: JSON.stringify({
+      refreshToken,
+    }),
   });
 
-  const data = await response.json();
-  
   if (!response.ok) {
-    console.error('Token refresh error:', data);
-    throw new Error(data.error || 'Failed to refresh Pinterest token');
+    const error = await response.json();
+    console.error('Token refresh error:', error);
+    throw new Error(error.message || 'Failed to refresh token');
   }
 
-  return data.token;
+  return response.json();
 }
 
 export async function fetchPinterestBoards(accessToken: string): Promise<PinterestBoard[]> {
-  console.log('Fetching Pinterest boards...');
-  const response = await fetch(`/.netlify/functions/pinterest?path=/boards`, {
+  const response = await fetch('/.netlify/functions/pinterest/boards', {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'Origin': window.location.origin,
     },
   });
 
-  const data = await response.json();
-  
   if (!response.ok) {
-    console.error('Boards fetch error:', data);
-    throw new Error(data.error || 'Failed to fetch Pinterest boards');
+    const error = await response.json();
+    console.error('Boards fetch error:', error);
+    throw new Error(error.message || 'Failed to fetch boards');
   }
 
-  return data;
+  return response.json();
 }
 
 export async function schedulePin(pin: ScheduledPin): Promise<void> {
@@ -85,15 +80,13 @@ export async function schedulePin(pin: ScheduledPin): Promise<void> {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${userId}`,
-      'Origin': window.location.origin,
     },
     body: JSON.stringify([pin]),
   });
 
-  const data = await response.json();
-  
   if (!response.ok) {
-    console.error('Pin scheduling error:', data);
-    throw new Error(data.error || 'Failed to schedule pin');
+    const error = await response.json();
+    console.error('Pin scheduling error:', error);
+    throw new Error(error.message || 'Failed to schedule pin');
   }
 }
