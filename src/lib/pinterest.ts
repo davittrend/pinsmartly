@@ -4,8 +4,8 @@ import type { PinterestBoard, PinterestToken, PinterestUser, ScheduledPin } from
 const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
 const CLIENT_ID = '1507772';
 const REDIRECT_URI = typeof window !== 'undefined' 
-  ? `${window.location.origin}/dashboard/accounts`
-  : 'http://localhost:5173/dashboard/accounts';
+  ? `${window.location.origin}/callback`
+  : 'http://localhost:5173/callback';
 
 export async function getPinterestAuthUrl() {
   const scope = 'boards:read,pins:read,pins:write,user_accounts:read,boards:write';
