@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { getPinterestAuthUrl, exchangePinterestCode, fetchPinterestBoards } from '@/lib/pinterest';
 import { useAccountStore } from '@/lib/store';
 import { PinterestAccount } from '@/types/pinterest';
+import { toast } from 'sonner';
 
 export function Accounts() {
   const location = useLocation();
@@ -18,6 +19,7 @@ export function Accounts() {
       window.location.href = authUrl;
     } catch (error) {
       console.error('Error connecting Pinterest:', error);
+      toast.error('Failed to connect to Pinterest');
     } finally {
       setIsConnecting(false);
     }
@@ -40,16 +42,18 @@ export function Accounts() {
             lastRefreshed: Date.now(),
           };
           
-          addAccount(newAccount);
+          await addAccount(newAccount);
           
           // Fetch boards for the new account
           const boards = await fetchPinterestBoards(token.access_token);
-          setBoards(newAccount.id, boards);
+          await setBoards(newAccount.id, boards);
           
           // Clear the URL
           window.history.replaceState({}, '', '/dashboard/accounts');
+          toast.success('Pinterest account connected successfully!');
         } catch (error) {
           console.error('Error handling Pinterest callback:', error);
+          toast.error('Failed to connect Pinterest account');
         } finally {
           setIsLoading(false);
         }
@@ -79,7 +83,7 @@ export function Accounts() {
         </Button>
       </div>
 
-      {accounts.length > 0 ? (
+      {accounts?.length > 0 ? (
         <div className="grid gap-6">
           <div className="bg-white rounded-lg shadow p-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -98,7 +102,7 @@ export function Accounts() {
             </select>
           </div>
 
-          {selectedAccountId && boards[selectedAccountId] && (
+          {selectedAccountId && boards?.[selectedAccountId] && (
             <div className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b">
                 <h2 className="text-lg font-medium">Boards</h2>
