@@ -1,13 +1,9 @@
 import { Handler } from '@netlify/functions';
-import {
-  exchangeCodeForToken,
-  refreshToken,
-  fetchUserAccount,
-  fetchBoards,
-} from './utils/pinterest-api';
+import fetch from 'node-fetch';
 
-const clientId = process.env.PINTEREST_CLIENT_ID;
-const clientSecret = process.env.PINTEREST_CLIENT_SECRET;
+const PINTEREST_API_URL = process.env.PINTEREST_API_URL || 'https://api-sandbox.pinterest.com/v5';
+const CLIENT_ID = process.env.PINTEREST_CLIENT_ID;
+const CLIENT_SECRET = process.env.PINTEREST_CLIENT_SECRET;
 
 export const handler: Handler = async (event) => {
   const headers = {
@@ -20,90 +16,134 @@ export const handler: Handler = async (event) => {
     return { statusCode: 204, headers, body: '' };
   }
 
-  const path = event.queryStringParameters?.path;
-
   try {
-    if (!clientId || !clientSecret) {
-      console.error('Missing Pinterest credentials');
-      throw new Error('Pinterest client credentials not configured');
+    if (!CLIENT_ID || !CLIENT_SECRET) {
+      throw new Error('Pinterest credentials not configured');
     }
 
-    switch (path) {
-      case '/boards': {
-        const accessToken = event.headers.authorization?.replace('Bearer ', '');
-        if (!accessToken) {
-          return {
-            statusCode: 401,
-            headers,
-            body: JSON.stringify({ error: 'No access token provided' }),
-          };
+    if (event.httpMethod === 'POST') {
+      const { code, refreshToken, redirectUri } = JSON.parse(event.body || '{}');
+
+      // Handle token exchange
+      if (code && redirectUri) {
+        console.log('Exchanging code for token...', { redirectUri });
+        
+        const tokenResponse = await fetch(`${PINTEREST_API_URL}/oauth/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64')}`,
+          },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: redirectUri,
+          }).toString(),
+        });
+
+        const tokenData = await tokenResponse.json();
+        
+        if (!tokenResponse.ok) {
+          console.error('Token exchange failed:', tokenData);
+          throw new Error(tokenData.error_description || 'Token exchange failed');
         }
 
-        console.log('Fetching boards...');
-        const boards = await fetchBoards(accessToken);
+        // Fetch user data
+        const userResponse = await fetch(`${PINTEREST_API_URL}/user_account`, {
+          headers: {
+            'Authorization': `Bearer ${tokenData.access_token}`,
+          },
+        });
+
+        const userData = await userResponse.json();
+        
+        if (!userResponse.ok) {
+          console.error('User data fetch failed:', userData);
+          throw new Error(userData.message || 'Failed to fetch user data');
+        }
 
         return {
           statusCode: 200,
           headers,
-          body: JSON.stringify(boards),
+          body: JSON.stringify({
+            token: tokenData,
+            user: userData,
+          }),
         };
       }
 
-      case '/token': {
-        const { code, refresh_token } = event.queryStringParameters || {};
-        const redirectUri = `${event.headers.origin}/callback`;
-        
-        if (!code && !refresh_token) {
-          return { 
-            statusCode: 400, 
-            headers, 
-            body: JSON.stringify({ error: 'Code or refresh token required' }) 
-          };
-        }
-
-        console.log('Processing token request:', {
-          hasCode: !!code,
-          hasRefreshToken: !!refresh_token,
+      // Handle token refresh
+      if (refreshToken) {
+        const response = await fetch(`${PINTEREST_API_URL}/oauth/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64')}`,
+          },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken,
+          }).toString(),
         });
 
-        if (code) {
-          const token = await exchangeCodeForToken(code, redirectUri, clientId, clientSecret);
-          const user = await fetchUserAccount(token.access_token);
-
-          console.log('Authentication successful');
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({ token, user }),
-          };
+        const data = await response.json();
+        
+        if (!response.ok) {
+          console.error('Token refresh failed:', data);
+          throw new Error(data.error_description || 'Token refresh failed');
         }
 
-        if (refresh_token) {
-          const token = await refreshToken(refresh_token, clientId, clientSecret);
-          console.log('Token refresh successful');
-          
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({ token }),
-          };
-        }
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify(data),
+        };
+      }
+    }
+
+    // Handle board fetching
+    if (event.path.endsWith('/boards')) {
+      const accessToken = event.headers.authorization?.replace('Bearer ', '');
+      if (!accessToken) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ error: 'No access token provided' }),
+        };
       }
 
-      default:
-        return { 
-          statusCode: 404, 
-          headers, 
-          body: JSON.stringify({ error: 'Not found' }) 
-        };
+      const response = await fetch(`${PINTEREST_API_URL}/boards`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Boards fetch failed:', data);
+        throw new Error(data.message || 'Failed to fetch boards');
+      }
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(data.items || []),
+      };
     }
+
+    return {
+      statusCode: 404,
+      headers,
+      body: JSON.stringify({ error: 'Not found' }),
+    };
   } catch (error) {
     console.error('Pinterest API Error:', error);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Internal server error' 
+      body: JSON.stringify({
+        error: error instanceof Error ? error.message : 'Internal server error',
       }),
     };
   }
