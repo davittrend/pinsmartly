@@ -15,7 +15,12 @@ export function SchedulePins() {
   const [isScheduling, setIsScheduling] = useState(false);
 
   const handlePinsLoaded = (loadedPins: PinData[]) => {
+    if (loadedPins.length === 0) {
+      toast.error('No pins uploaded. Please upload valid pins.');
+      return;
+    }
     setPins(loadedPins);
+    toast.success(`${loadedPins.length} pins loaded successfully!`);
   };
 
   const generateSchedule = async () => {
@@ -32,16 +37,14 @@ export function SchedulePins() {
 
     setIsScheduling(true);
     try {
-      // Calculate time slots
       const now = new Date();
       const scheduledPins: ScheduledPin[] = pins.map((pin, index) => {
-        const minutesOffset = (index % pinsPerDay) * (24 * 60 / pinsPerDay); // Spread pins evenly throughout the day
+        const minutesOffset = (index % pinsPerDay) * (24 * 60 / pinsPerDay);
         const daysOffset = Math.floor(index / pinsPerDay);
         const scheduleDate = new Date(now);
         scheduleDate.setDate(scheduleDate.getDate() + daysOffset);
         scheduleDate.setMinutes(scheduleDate.getMinutes() + minutesOffset);
 
-        // Randomly select a board
         const randomBoard = accountBoards[Math.floor(Math.random() * accountBoards.length)];
 
         return {
@@ -54,16 +57,15 @@ export function SchedulePins() {
         };
       });
 
-      // Schedule each pin
       for (const pin of scheduledPins) {
         await schedulePin(pin);
       }
 
-      setPins([]); // Clear pins after scheduling
+      setPins([]);
       toast.success(`Successfully scheduled ${scheduledPins.length} pins`);
     } catch (error) {
-      toast.error('Failed to schedule pins');
-      console.error('Scheduling error:', error);
+      console.error('Error scheduling pins:', error);
+      toast.error('Failed to schedule pins. Check console for details.');
     } finally {
       setIsScheduling(false);
     }
@@ -74,9 +76,7 @@ export function SchedulePins() {
       <div className="text-center p-8">
         <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
         <h3 className="mt-2 text-sm font-semibold text-gray-900">No Account Selected</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Please select a Pinterest account first.
-        </p>
+        <p className="mt-1 text-sm text-gray-500">Please select a Pinterest account first.</p>
       </div>
     );
   }
@@ -85,12 +85,9 @@ export function SchedulePins() {
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-medium mb-4">Schedule Pins</h2>
-        
         <div className="space-y-6">
           <AccountSelector />
-          
           <FileUploader onPinsLoaded={handlePinsLoaded} />
-
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Pins per Day
@@ -104,7 +101,6 @@ export function SchedulePins() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500 sm:text-sm"
             />
           </div>
-
           {pins.length > 0 && (
             <div className="mt-4">
               <Button
