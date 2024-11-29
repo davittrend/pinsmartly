@@ -12,7 +12,7 @@ export function PinterestCallback() {
     const handleCallback = async () => {
       const searchParams = new URLSearchParams(window.location.search);
       const code = searchParams.get('code');
-      
+
       if (!code) {
         toast.error('No authorization code received');
         navigate('/dashboard/accounts');
@@ -21,7 +21,7 @@ export function PinterestCallback() {
 
       try {
         const { token, user } = await exchangePinterestCode(code);
-        
+
         const newAccount = {
           id: user.username,
           user,
@@ -45,7 +45,7 @@ export function PinterestCallback() {
     };
 
     handleCallback();
-  }, []);
+  }, [navigate, addAccount, setBoards]); // Add the dependencies here
 
   return (
     <div className="min-h-screen flex items-center justify-center">
