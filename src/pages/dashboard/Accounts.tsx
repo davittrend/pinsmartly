@@ -15,16 +15,24 @@ export function Accounts() {
     removeAccount, 
     setSelectedAccount, 
     setBoards,
-    initializeAccountListener 
+    initializeAccountListener,
+    initialized
   } = useAccountStore();
 
   useEffect(() => {
     console.log('Accounts component mounted');
-    console.log('Current accounts:', accounts);
-    console.log('Selected account ID:', selectedAccountId);
-    console.log('Boards:', boards);
-    initializeAccountListener();
+    const cleanup = initializeAccountListener();
+    return () => cleanup();
   }, []);
+
+  useEffect(() => {
+    console.log('Store state updated:', {
+      initialized,
+      accountsCount: accounts?.length,
+      selectedAccountId,
+      boardsCount: Object.keys(boards || {}).length
+    });
+  }, [initialized, accounts, selectedAccountId, boards]);
 
   const handleConnectPinterest = async () => {
     try {
@@ -65,6 +73,14 @@ export function Accounts() {
       setIsRefreshing(false);
     }
   };
+
+  if (!initialized) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
