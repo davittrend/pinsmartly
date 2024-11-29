@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { getPinterestAuthUrl, fetchPinterestBoards } from '@/lib/pinterest';
 import { useAccountStore } from '@/lib/store';
@@ -8,31 +8,7 @@ import { Trash2, RefreshCw } from 'lucide-react';
 export function Accounts() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { 
-    accounts, 
-    selectedAccountId, 
-    boards, 
-    removeAccount, 
-    setSelectedAccount, 
-    setBoards,
-    initializeAccountListener,
-    initialized
-  } = useAccountStore();
-
-  useEffect(() => {
-    console.log('Accounts component mounted');
-    const cleanup = initializeAccountListener();
-    return () => cleanup();
-  }, []);
-
-  useEffect(() => {
-    console.log('Store state updated:', {
-      initialized,
-      accountsCount: accounts?.length,
-      selectedAccountId,
-      boardsCount: Object.keys(boards || {}).length
-    });
-  }, [initialized, accounts, selectedAccountId, boards]);
+  const { accounts, selectedAccountId, boards, removeAccount, setSelectedAccount, setBoards } = useAccountStore();
 
   const handleConnectPinterest = async () => {
     try {
@@ -49,7 +25,7 @@ export function Accounts() {
 
   const handleDisconnectAccount = async (accountId: string) => {
     try {
-      await removeAccount(accountId);
+      removeAccount(accountId);
       toast.success('Account disconnected successfully');
     } catch (error) {
       console.error('Error disconnecting account:', error);
@@ -64,7 +40,7 @@ export function Accounts() {
       if (!account) throw new Error('Account not found');
 
       const boards = await fetchPinterestBoards(account.token.access_token);
-      await setBoards(accountId, boards);
+      setBoards(accountId, boards);
       toast.success('Boards refreshed successfully');
     } catch (error) {
       console.error('Error refreshing boards:', error);
@@ -73,14 +49,6 @@ export function Accounts() {
       setIsRefreshing(false);
     }
   };
-
-  if (!initialized) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
