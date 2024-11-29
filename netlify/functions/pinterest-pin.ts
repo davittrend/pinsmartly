@@ -1,120 +1,165 @@
 import { Handler } from '@netlify/functions';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getDatabase } from 'firebase-admin/database';
+import fetch from 'node-fetch';
 
+const clientId = process.env.PINTEREST_CLIENT_ID;
+const clientSecret = process.env.PINTEREST_CLIENT_SECRET;
 const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
-
-// Initialize Firebase Admin
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-    databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
-  });
-}
-
-const database = getDatabase();
 
 export const handler: Handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   };
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers, body: '' };
   }
 
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    };
-  }
+  const path = event.queryStringParameters?.path;
 
   try {
-    const userId = event.headers.authorization?.split(' ')[1];
-    if (!userId) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Unauthorized' }),
-      };
+    if (!clientId || !clientSecret) {
+      console.error('Missing Pinterest credentials:', { clientId: !!clientId, clientSecret: !!clientSecret });
+      throw new Error('Pinterest client credentials not configured');
     }
 
-    const { pinId } = JSON.parse(event.body || '{}');
+    switch (path) {
+      case '/boards': {
+        const accessToken = event.headers.authorization?.replace('Bearer ', '');
+        if (!accessToken) {
+          return {
+            statusCode: 401,
+            headers,
+            body: JSON.stringify({ error: 'No access token provided' }),
+          };
+        }
 
-    // Get pin data from Firebase
-    const pinSnapshot = await database
-      .ref(`users/${userId}/scheduled_pins/${pinId}`)
-      .once('value');
-    
-    const pin = pinSnapshot.val();
-    if (!pin) {
-      throw new Error('Pin not found');
+        console.log('Fetching boards with token:', accessToken.substring(0, 10) + '...');
+        
+        const response = await fetch(`${PINTEREST_API_URL}/boards`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+          console.error('Pinterest boards error:', {
+            status: response.status,
+            statusText: response.statusText,
+            data
+          });
+          throw new Error(data.message || 'Failed to fetch boards');
+        }
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify(data.items),
+        };
+      }
+
+      case '/token': {
+        const { code, refresh_token } = event.queryStringParameters || {};
+        const redirectUri = `${event.headers.origin}/callback`;
+        
+        if (!code && !refresh_token) {
+          return { 
+            statusCode: 400, 
+            headers, 
+            body: JSON.stringify({ error: 'Code or refresh token required' }) 
+          };
+        }
+
+        console.log('Token exchange params:', {
+          grantType: refresh_token ? 'refresh_token' : 'authorization_code',
+          code: code ? `${code.substring(0, 10)}...` : undefined,
+          refreshToken: refresh_token ? `${refresh_token.substring(0, 10)}...` : undefined,
+          redirectUri
+        });
+
+        const tokenResponse = await fetch(`${PINTEREST_API_URL}/oauth/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+          },
+          body: new URLSearchParams({
+            grant_type: refresh_token ? 'refresh_token' : 'authorization_code',
+            ...(code ? { 
+              code,
+              redirect_uri: redirectUri
+            } : { 
+              refresh_token 
+            }),
+          }).toString(),
+        });
+
+        const tokenData = await tokenResponse.json();
+        
+        if (!tokenResponse.ok) {
+          console.error('Pinterest token error:', {
+            status: tokenResponse.status,
+            statusText: tokenResponse.statusText,
+            error: tokenData
+          });
+          throw new Error(tokenData.error_description || tokenData.error || 'Token exchange failed');
+        }
+
+        console.log('Token exchange successful');
+
+        if (code) {
+          console.log('Fetching user data with new token');
+          
+          const userResponse = await fetch(`${PINTEREST_API_URL}/user_account`, {
+            headers: { 
+              'Authorization': `Bearer ${tokenData.access_token}` 
+            },
+          });
+
+          const userData = await userResponse.json();
+          
+          if (!userResponse.ok) {
+            console.error('Pinterest user error:', {
+              status: userResponse.status,
+              statusText: userResponse.statusText,
+              error: userData
+            });
+            throw new Error(userData.message || 'Failed to fetch user data');
+          }
+
+          console.log('User data fetched successfully');
+
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ token: tokenData, user: userData }),
+          };
+        }
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ token: tokenData }),
+        };
+      }
+
+      default:
+        return { 
+          statusCode: 404, 
+          headers, 
+          body: JSON.stringify({ error: 'Not found' }) 
+        };
     }
-
-    // Get account data from Firebase
-    const accountSnapshot = await database
-      .ref(`users/${userId}/accounts/${pin.accountId}`)
-      .once('value');
-    
-    const account = accountSnapshot.val();
-    if (!account) {
-      throw new Error('Account not found');
-    }
-
-    // Create pin on Pinterest
-    const response = await fetch(`${PINTEREST_API_URL}/pins`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${account.token.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        board_id: pin.boardId,
-        title: pin.title,
-        description: pin.description,
-        link: pin.link,
-        media_source: {
-          source_type: 'image_url',
-          url: pin.imageUrl,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create pin');
-    }
-
-    const pinterestPin = await response.json();
-
-    // Update pin status in Firebase
-    await database
-      .ref(`users/${userId}/scheduled_pins/${pinId}`)
-      .update({
-        status: 'published',
-        pinterestId: pinterestPin.id,
-      });
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ success: true, pin: pinterestPin }),
-    };
   } catch (error) {
-    console.error('Error publishing pin:', error);
+    console.error('Pinterest API Error:', error);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({
-        error: error instanceof Error ? error.message : 'Internal server error',
+      body: JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Internal server error' 
       }),
     };
   }
