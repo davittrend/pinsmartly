@@ -1,37 +1,21 @@
 import { useState } from 'react';
 import { useAccountStore } from '@/lib/store';
 import { Button } from '@/components/ui/Button';
-import { Upload, AlertCircle } from 'lucide-react';
-import { PinData } from '@/types/pinterest';
+import { AlertCircle } from 'lucide-react';
+import { AccountSelector } from '@/components/schedule/AccountSelector';
+import { FileUploader } from '@/components/schedule/FileUploader';
+import { schedulePin } from '@/lib/pinterest';
+import type { PinData, ScheduledPin } from '@/types/pinterest';
 import { toast } from 'sonner';
-import Papa from 'papaparse';
 
 export function SchedulePins() {
-  const { selectedAccountId, boards, accounts } = useAccountStore();
+  const { selectedAccountId, boards } = useAccountStore();
   const [pins, setPins] = useState<PinData[]>([]);
   const [pinsPerDay, setPinsPerDay] = useState(10);
   const [isScheduling, setIsScheduling] = useState(false);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    Papa.parse(file, {
-      complete: (results) => {
-        const parsedPins = results.data.slice(1).map((row: any) => ({
-          title: row[0],
-          description: row[1],
-          link: row[2],
-          imageUrl: row[3],
-        }));
-        setPins(parsedPins);
-        toast.success(`Successfully loaded ${parsedPins.length} pins`);
-      },
-      header: true,
-      error: (error) => {
-        toast.error('Error parsing CSV file: ' + error.message);
-      },
-    });
+  const handlePinsLoaded = (loadedPins: PinData[]) => {
+    setPins(loadedPins);
   };
 
   const generateSchedule = async () => {
@@ -50,8 +34,8 @@ export function SchedulePins() {
     try {
       // Calculate time slots
       const now = new Date();
-      const scheduledPins = pins.map((pin, index) => {
-        const minutesOffset = (index % pinsPerDay) * 10; // 10 minutes between pins
+      const scheduledPins: ScheduledPin[] = pins.map((pin, index) => {
+        const minutesOffset = (index % pinsPerDay) * (24 * 60 / pinsPerDay); // Spread pins evenly throughout the day
         const daysOffset = Math.floor(index / pinsPerDay);
         const scheduleDate = new Date(now);
         scheduleDate.setDate(scheduleDate.getDate() + daysOffset);
@@ -64,15 +48,19 @@ export function SchedulePins() {
           ...pin,
           id: crypto.randomUUID(),
           boardId: randomBoard.id,
+          accountId: selectedAccountId,
           scheduledTime: scheduleDate.toISOString(),
-          status: 'scheduled' as const,
+          status: 'scheduled',
         };
       });
 
-      // Store scheduled pins (you'll need to implement this)
-      // await storeScheduledPins(scheduledPins);
+      // Schedule each pin
+      for (const pin of scheduledPins) {
+        await schedulePin(pin);
+      }
 
-      toast.success('Pins scheduled successfully!');
+      setPins([]); // Clear pins after scheduling
+      toast.success(`Successfully scheduled ${scheduledPins.length} pins`);
     } catch (error) {
       toast.error('Failed to schedule pins');
       console.error('Scheduling error:', error);
@@ -98,31 +86,10 @@ export function SchedulePins() {
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-medium mb-4">Schedule Pins</h2>
         
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Upload CSV File
-            </label>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-              <div className="space-y-1 text-center">
-                <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                <div className="flex text-sm text-gray-600">
-                  <label className="relative cursor-pointer bg-white rounded-md font-medium text-pink-600 hover:text-pink-500">
-                    <span>Upload a file</span>
-                    <input
-                      type="file"
-                      className="sr-only"
-                      accept=".csv"
-                      onChange={handleFileUpload}
-                    />
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500">
-                  CSV with columns: title, description, link, imageUrl
-                </p>
-              </div>
-            </div>
-          </div>
+        <div className="space-y-6">
+          <AccountSelector />
+          
+          <FileUploader onPinsLoaded={handlePinsLoaded} />
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
@@ -145,7 +112,7 @@ export function SchedulePins() {
                 disabled={isScheduling}
                 className="w-full"
               >
-                {isScheduling ? 'Scheduling...' : 'Schedule Now'}
+                {isScheduling ? 'Scheduling...' : `Schedule ${pins.length} Pins`}
               </Button>
             </div>
           )}
@@ -155,7 +122,7 @@ export function SchedulePins() {
       {pins.length > 0 && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="px-6 py-4 border-b">
-            <h3 className="text-lg font-medium">Uploaded Pins ({pins.length})</h3>
+            <h3 className="text-lg font-medium">Pins to Schedule ({pins.length})</h3>
           </div>
           <div className="divide-y">
             {pins.slice(0, 5).map((pin, index) => (
