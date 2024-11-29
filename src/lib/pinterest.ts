@@ -1,16 +1,24 @@
-import { auth } from './firebase';
 import type { PinterestBoard, PinterestToken, PinterestUser, ScheduledPin } from '@/types/pinterest';
 
-const CLIENT_ID = '1507772';
+const CLIENT_ID = import.meta.env.VITE_PINTEREST_CLIENT_ID || '1507772';
 const REDIRECT_URI = typeof window !== 'undefined' 
   ? `${window.location.origin}/callback`
   : '';
 
 export async function getPinterestAuthUrl() {
-  const scope = 'boards:read,pins:read,pins:write,user_accounts:read,boards:write';
-  const state = crypto.randomUUID(); // Use unique state for security
+  const scopes = [
+    'boards:read',
+    'boards:write',
+    'pins:read',
+    'pins:write',
+    'user_accounts:read',
+    'ad_accounts:read'
+  ];
+  
+  const state = crypto.randomUUID();
   const redirectUri = encodeURIComponent(REDIRECT_URI);
-  return `https://www.pinterest.com/oauth/?client_id=${CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
+  
+  return `https://www.pinterest.com/oauth/?client_id=${CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes.join(',')}&state=${state}`;
 }
 
 export async function exchangePinterestCode(code: string): Promise<{ token: PinterestToken; user: PinterestUser }> {
@@ -34,29 +42,9 @@ export async function exchangePinterestCode(code: string): Promise<{ token: Pint
   return response.json();
 }
 
-export async function refreshPinterestToken(refreshToken: string): Promise<PinterestToken> {
-  const response = await fetch('/.netlify/functions/pinterest', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      refreshToken,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    console.error('Token refresh error:', error);
-    throw new Error(error.message || 'Failed to refresh token');
-  }
-
-  return response.json();
-}
-
 export async function fetchPinterestBoards(accessToken: string): Promise<PinterestBoard[]> {
+  console.log('Fetching Pinterest boards...');
   const response = await fetch('/.netlify/functions/pinterest/boards', {
-    method: 'GET',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
     },
@@ -68,18 +56,34 @@ export async function fetchPinterestBoards(accessToken: string): Promise<Pintere
     throw new Error(error.message || 'Failed to fetch boards');
   }
 
+  const boards = await response.json();
+  console.log('Fetched boards:', boards);
+  return boards;
+}
+
+export async function refreshPinterestToken(refreshToken: string): Promise<PinterestToken> {
+  const response = await fetch('/.netlify/functions/pinterest', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    console.error('Token refresh error:', error);
+    throw new Error(error.message || 'Failed to refresh token');
+  }
+
   return response.json();
 }
 
 export async function schedulePin(pin: ScheduledPin): Promise<void> {
-  const userId = auth.currentUser?.uid;
-  if (!userId) throw new Error('User not authenticated');
-
   const response = await fetch('/.netlify/functions/pin-scheduler', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${userId}`,
     },
     body: JSON.stringify([pin]),
   });
