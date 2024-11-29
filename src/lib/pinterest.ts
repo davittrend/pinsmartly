@@ -1,7 +1,6 @@
 import { auth } from './firebase';
 import type { PinterestBoard, PinterestToken, PinterestUser, ScheduledPin } from '@/types/pinterest';
 
-const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
 const CLIENT_ID = '1507772';
 const REDIRECT_URI = typeof window !== 'undefined' 
   ? `${window.location.origin}/callback`
@@ -44,9 +43,11 @@ export async function refreshPinterestToken(refreshToken: string): Promise<Pinte
 }
 
 export async function fetchPinterestBoards(accessToken: string): Promise<PinterestBoard[]> {
-  const response = await fetch(`${PINTEREST_API_URL}/boards`, {
+  const response = await fetch(`/.netlify/functions/pinterest?path=/boards`, {
+    method: 'GET',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
     },
   });
 
@@ -55,8 +56,7 @@ export async function fetchPinterestBoards(accessToken: string): Promise<Pintere
     throw new Error(error.message || 'Failed to fetch Pinterest boards');
   }
 
-  const data = await response.json();
-  return data.items;
+  return response.json();
 }
 
 export async function schedulePin(pin: ScheduledPin): Promise<void> {
