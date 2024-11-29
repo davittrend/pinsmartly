@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ref, set, get } from 'firebase/database';
+import { ref, set, get, onValue } from 'firebase/database';
 import { database, auth } from './firebase';
 import type { PinterestAccount, PinterestBoard } from '@/types/pinterest';
 
@@ -13,6 +13,7 @@ interface AccountStore {
   setSelectedAccount: (accountId: string) => void;
   setBoards: (accountId: string, boards: PinterestBoard[]) => Promise<void>;
   getAccount: (accountId: string) => PinterestAccount | undefined;
+  initializeAccountListener: () => void;
 }
 
 export const useAccountStore = create<AccountStore>()(
@@ -22,45 +23,47 @@ export const useAccountStore = create<AccountStore>()(
       selectedAccountId: null,
       boards: {},
 
+      initializeAccountListener: () => {
+        const userId = auth.currentUser?.uid;
+        if (!userId) return;
+
+        const accountsRef = ref(database, `users/${userId}/accounts`);
+        onValue(accountsRef, (snapshot) => {
+          const accounts = snapshot.val();
+          if (accounts) {
+            const accountsList = Object.values(accounts) as PinterestAccount[];
+            set({ 
+              accounts: accountsList,
+              selectedAccountId: get().selectedAccountId || accountsList[0]?.id
+            });
+          }
+        });
+
+        const boardsRef = ref(database, `users/${userId}/boards`);
+        onValue(boardsRef, (snapshot) => {
+          const boards = snapshot.val();
+          if (boards) {
+            set({ boards });
+          }
+        });
+      },
+
       addAccount: async (account) => {
         const userId = auth.currentUser?.uid;
         if (!userId) throw new Error('User not authenticated');
 
-        // Check if account already exists
-        const existingAccounts = get().accounts || [];
-        const existingAccount = existingAccounts.find(a => a.id === account.id);
-        
-        if (existingAccount) {
-          // Update existing account
-          const updatedAccounts = existingAccounts.map(a => 
-            a.id === account.id ? { ...a, ...account } : a
-          );
-
-          // Save to Firebase
-          await set(ref(database, `users/${userId}/accounts/${account.id}`), account);
-          
-          set({ accounts: updatedAccounts });
-        } else {
-          // Add new account
-          await set(ref(database, `users/${userId}/accounts/${account.id}`), account);
-          
-          set((state) => ({
-            accounts: [...(state.accounts || []), account],
-            selectedAccountId: state.selectedAccountId || account.id,
-          }));
-        }
+        await set(ref(database, `users/${userId}/accounts/${account.id}`), account);
       },
 
       removeAccount: async (accountId) => {
         const userId = auth.currentUser?.uid;
         if (!userId) throw new Error('User not authenticated');
 
-        // Remove from Firebase
         await set(ref(database, `users/${userId}/accounts/${accountId}`), null);
         await set(ref(database, `users/${userId}/boards/${accountId}`), null);
         
         set((state) => {
-          const remainingAccounts = (state.accounts || []).filter(a => a.id !== accountId);
+          const remainingAccounts = state.accounts.filter(a => a.id !== accountId);
           return {
             accounts: remainingAccounts,
             selectedAccountId:
@@ -68,7 +71,7 @@ export const useAccountStore = create<AccountStore>()(
                 ? remainingAccounts[0]?.id || null
                 : state.selectedAccountId,
             boards: {
-              ...(state.boards || {}),
+              ...state.boards,
               [accountId]: undefined,
             },
           };
@@ -81,15 +84,7 @@ export const useAccountStore = create<AccountStore>()(
         const userId = auth.currentUser?.uid;
         if (!userId) throw new Error('User not authenticated');
 
-        // Save to Firebase
         await set(ref(database, `users/${userId}/boards/${accountId}`), boards);
-        
-        set((state) => ({
-          boards: {
-            ...(state.boards || {}),
-            [accountId]: boards,
-          },
-        }));
       },
 
       getAccount: (accountId) => {
