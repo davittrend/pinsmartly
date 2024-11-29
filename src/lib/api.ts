@@ -24,7 +24,6 @@ export const fetchScheduledPins = async (idToken: string) => {
   }
 };
 
-// Add other API functions
 export const createScheduledPin = async (idToken: string, pinData: any) => {
   try {
     const response = await fetch('/.netlify/functions/pin-scheduler', {
