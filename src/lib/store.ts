@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ref, set, get, child } from 'firebase/database';
-import { database } from './firebase';
+import { database, auth } from './firebase';  // Add auth import here
 import type { PinterestAccount, PinterestBoard } from '@/types/pinterest';
 
 interface AccountStore {
@@ -26,7 +26,7 @@ export const useAccountStore = create<AccountStore>()(
 
         // Save to Firebase
         await set(ref(database, `users/${userId}/accounts/${account.id}`), account);
-        
+
         set((state) => ({
           accounts: [...state.accounts, account],
           selectedAccountId: state.selectedAccountId || account.id,
@@ -38,7 +38,7 @@ export const useAccountStore = create<AccountStore>()(
 
         // Remove from Firebase
         await set(ref(database, `users/${userId}/accounts/${accountId}`), null);
-        
+
         set((state) => ({
           accounts: state.accounts.filter((a) => a.id !== accountId),
           selectedAccountId:
@@ -59,7 +59,7 @@ export const useAccountStore = create<AccountStore>()(
 
         // Save to Firebase
         await set(ref(database, `users/${userId}/boards/${accountId}`), boards);
-        
+
         set((state) => ({
           boards: {
             ...state.boards,
