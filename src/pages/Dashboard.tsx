@@ -5,7 +5,7 @@ import { getAuth } from 'firebase/auth';
 import { fetchScheduledPins } from '../lib/api'; // Adjusted import path
 import type { ScheduledPin } from '../types/pinterest'; // Adjusted import path
 
-const Dashboard = () => {
+export function Dashboard() {
   const [pins, setPins] = useState<ScheduledPin[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
