@@ -2,10 +2,6 @@ import { Handler } from '@netlify/functions';
 
 const clientId = process.env.PINTEREST_CLIENT_ID;
 const clientSecret = process.env.PINTEREST_CLIENT_SECRET;
-const redirectUri = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:5173/callback'
-  : `${process.env.URL}/callback`;
-
 const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
 
 export const handler: Handler = async (event) => {
@@ -29,7 +25,7 @@ export const handler: Handler = async (event) => {
     switch (path) {
       case '/oauth/url': {
         const scope = 'boards:read,pins:read,pins:write,user_accounts:read,boards:write';
-        const authUrl = `https://www.pinterest.com/oauth/?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=sandbox`;
+        const authUrl = `https://www.pinterest.com/oauth/?client_id=${clientId}&redirect_uri=${event.headers.referer}&response_type=code&scope=${scope}&state=sandbox`;
         return { 
           statusCode: 200, 
           headers, 
@@ -56,7 +52,7 @@ export const handler: Handler = async (event) => {
           },
           body: new URLSearchParams({
             grant_type: refresh_token ? 'refresh_token' : 'authorization_code',
-            ...(code ? { code, redirect_uri: redirectUri } : { refresh_token }),
+            ...(code ? { code, redirect_uri: event.headers.referer } : { refresh_token }),
           }),
         });
 
