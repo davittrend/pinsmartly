@@ -1,8 +1,13 @@
 import { Handler } from '@netlify/functions';
+import {
+  exchangeCodeForToken,
+  refreshToken,
+  fetchUserAccount,
+  fetchBoards,
+} from './utils/pinterest-api';
 
 const clientId = process.env.PINTEREST_CLIENT_ID;
 const clientSecret = process.env.PINTEREST_CLIENT_SECRET;
-const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
 
 export const handler: Handler = async (event) => {
   const headers = {
@@ -19,6 +24,7 @@ export const handler: Handler = async (event) => {
 
   try {
     if (!clientId || !clientSecret) {
+      console.error('Missing Pinterest credentials');
       throw new Error('Pinterest client credentials not configured');
     }
 
@@ -33,28 +39,19 @@ export const handler: Handler = async (event) => {
           };
         }
 
-        const response = await fetch(`${PINTEREST_API_URL}/boards`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) {
-          console.error('Pinterest boards error:', data);
-          throw new Error(data.message || 'Failed to fetch boards');
-        }
+        console.log('Fetching boards...');
+        const boards = await fetchBoards(accessToken);
 
         return {
           statusCode: 200,
           headers,
-          body: JSON.stringify(data.items),
+          body: JSON.stringify(boards),
         };
       }
 
       case '/token': {
         const { code, refresh_token } = event.queryStringParameters || {};
+        const redirectUri = `${event.headers.origin}/callback`;
         
         if (!code && !refresh_token) {
           return { 
@@ -64,49 +61,33 @@ export const handler: Handler = async (event) => {
           };
         }
 
-        const tokenResponse = await fetch(`${PINTEREST_API_URL}/oauth/token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-          },
-          body: new URLSearchParams({
-            grant_type: refresh_token ? 'refresh_token' : 'authorization_code',
-            ...(code ? { code, redirect_uri: event.headers.origin + '/callback' } : { refresh_token }),
-          }),
+        console.log('Processing token request:', {
+          hasCode: !!code,
+          hasRefreshToken: !!refresh_token,
         });
 
-        const tokenData = await tokenResponse.json();
-        
-        if (!tokenResponse.ok) {
-          console.error('Pinterest token error:', tokenData);
-          throw new Error(tokenData.error_description || tokenData.error || 'Token exchange failed');
-        }
-
         if (code) {
-          const userResponse = await fetch(`${PINTEREST_API_URL}/user_account`, {
-            headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
-          });
+          const token = await exchangeCodeForToken(code, redirectUri, clientId, clientSecret);
+          const user = await fetchUserAccount(token.access_token);
 
-          const userData = await userResponse.json();
-          
-          if (!userResponse.ok) {
-            console.error('Pinterest user error:', userData);
-            throw new Error(userData.message || 'Failed to fetch user data');
-          }
-
+          console.log('Authentication successful');
           return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ token: tokenData, user: userData }),
+            body: JSON.stringify({ token, user }),
           };
         }
 
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ token: tokenData }),
-        };
+        if (refresh_token) {
+          const token = await refreshToken(refresh_token, clientId, clientSecret);
+          console.log('Token refresh successful');
+          
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ token }),
+          };
+        }
       }
 
       default:
