@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { exchangePinterestCode, fetchPinterestBoards } from '@/lib/pinterest';
 import { useAccountStore } from '@/lib/store';
 import { toast } from 'sonner';
+import { auth } from '@/lib/firebase'; // Add this import
 
 export function PinterestCallback() {
   const navigate = useNavigate();
@@ -10,6 +11,13 @@ export function PinterestCallback() {
 
   useEffect(() => {
     const handleCallback = async () => {
+      // Check if user is authenticated
+      if (!auth.currentUser) {
+        toast.error('Please sign in first');
+        navigate('/signin');
+        return;
+      }
+
       const searchParams = new URLSearchParams(window.location.search);
       const code = searchParams.get('code');
 
@@ -45,7 +53,7 @@ export function PinterestCallback() {
     };
 
     handleCallback();
-  }, [navigate, addAccount, setBoards]); // Add the dependencies here
+  }, [navigate, addAccount, setBoards]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
