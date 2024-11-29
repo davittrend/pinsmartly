@@ -1,10 +1,10 @@
 // src/pages/Dashboard.tsx
-
 import { useEffect, useState } from 'react';
 import { getAuth } from 'firebase/auth';
-import { fetchScheduledPins } from '../lib/api'; // Adjusted import path
-import type { ScheduledPin } from '../types/pinterest'; // Adjusted import path
+import { fetchScheduledPins } from '@/lib/api';
+import type { ScheduledPin } from '@/types/pinterest';
 
+// Make sure the export matches exactly what's being imported
 export function Dashboard() {
   const [pins, setPins] = useState<ScheduledPin[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -37,11 +37,6 @@ export function Dashboard() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r">
-        {/* ... your existing sidebar code ... */}
-      </div>
-
       {/* Main Content */}
       <div className="flex-1 p-8 bg-gray-50 overflow-y-auto">
         {error && (
@@ -54,13 +49,11 @@ export function Dashboard() {
           <div className="text-center">Loading...</div>
         ) : (
           <div>
-            {/* Your pins display logic */}
             {pins.map((pin) => (
               <div key={pin.id}>
                 {/* Pin display component */}
                 <h3>{pin.title}</h3>
                 <p>{pin.description}</p>
-                {/* Add more pin details as needed */}
               </div>
             ))}
           </div>
@@ -68,6 +61,4 @@ export function Dashboard() {
       </div>
     </div>
   );
-};
-
-export default Dashboard;
+}
