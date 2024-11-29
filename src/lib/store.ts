@@ -43,6 +43,7 @@ export const useAccountStore = create<AccountStore>()(
 
         // Remove from Firebase
         await set(ref(database, `users/${userId}/accounts/${accountId}`), null);
+        await set(ref(database, `users/${userId}/boards/${accountId}`), null);
         
         set((state) => ({
           accounts: (state.accounts || []).filter((a) => a.id !== accountId),
@@ -51,7 +52,7 @@ export const useAccountStore = create<AccountStore>()(
               ? state.accounts[0]?.id || null
               : state.selectedAccountId,
           boards: {
-            ...state.boards,
+            ...(state.boards || {}),
             [accountId]: undefined,
           },
         }));
