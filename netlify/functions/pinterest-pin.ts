@@ -1,14 +1,18 @@
 import { Handler } from '@netlify/functions';
-import fetch from 'node-fetch';
+import {
+  exchangeCodeForToken,
+  refreshToken,
+  fetchUserAccount,
+  fetchBoards,
+} from './utils/pinterest-api';
 
 const clientId = process.env.PINTEREST_CLIENT_ID;
 const clientSecret = process.env.PINTEREST_CLIENT_SECRET;
-const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
 
 export const handler: Handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Origin',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   };
 
@@ -20,7 +24,7 @@ export const handler: Handler = async (event) => {
 
   try {
     if (!clientId || !clientSecret) {
-      console.error('Missing Pinterest credentials:', { clientId: !!clientId, clientSecret: !!clientSecret });
+      console.error('Missing Pinterest credentials');
       throw new Error('Pinterest client credentials not configured');
     }
 
@@ -35,29 +39,13 @@ export const handler: Handler = async (event) => {
           };
         }
 
-        console.log('Fetching boards with token:', accessToken.substring(0, 10) + '...');
-        
-        const response = await fetch(`${PINTEREST_API_URL}/boards`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) {
-          console.error('Pinterest boards error:', {
-            status: response.status,
-            statusText: response.statusText,
-            data
-          });
-          throw new Error(data.message || 'Failed to fetch boards');
-        }
+        console.log('Fetching boards...');
+        const boards = await fetchBoards(accessToken);
 
         return {
           statusCode: 200,
           headers,
-          body: JSON.stringify(data.items),
+          body: JSON.stringify(boards),
         };
       }
 
@@ -73,77 +61,34 @@ export const handler: Handler = async (event) => {
           };
         }
 
-        console.log('Token exchange params:', {
-          grantType: refresh_token ? 'refresh_token' : 'authorization_code',
-          code: code ? `${code.substring(0, 10)}...` : undefined,
-          refreshToken: refresh_token ? `${refresh_token.substring(0, 10)}...` : undefined,
-          redirectUri
+        console.log('Processing token request:', {
+          hasCode: !!code,
+          hasRefreshToken: !!refresh_token,
+          redirectUri,
         });
-
-        const tokenResponse = await fetch(`${PINTEREST_API_URL}/oauth/token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-          },
-          body: new URLSearchParams({
-            grant_type: refresh_token ? 'refresh_token' : 'authorization_code',
-            ...(code ? { 
-              code,
-              redirect_uri: redirectUri
-            } : { 
-              refresh_token 
-            }),
-          }).toString(),
-        });
-
-        const tokenData = await tokenResponse.json();
-        
-        if (!tokenResponse.ok) {
-          console.error('Pinterest token error:', {
-            status: tokenResponse.status,
-            statusText: tokenResponse.statusText,
-            error: tokenData
-          });
-          throw new Error(tokenData.error_description || tokenData.error || 'Token exchange failed');
-        }
-
-        console.log('Token exchange successful');
 
         if (code) {
-          console.log('Fetching user data with new token');
-          
-          const userResponse = await fetch(`${PINTEREST_API_URL}/user_account`, {
-            headers: { 
-              'Authorization': `Bearer ${tokenData.access_token}` 
-            },
-          });
+          const token = await exchangeCodeForToken(code, redirectUri, clientId, clientSecret);
+          const user = await fetchUserAccount(token.access_token);
 
-          const userData = await userResponse.json();
-          
-          if (!userResponse.ok) {
-            console.error('Pinterest user error:', {
-              status: userResponse.status,
-              statusText: userResponse.statusText,
-              error: userData
-            });
-            throw new Error(userData.message || 'Failed to fetch user data');
-          }
-
-          console.log('User data fetched successfully');
-
+          console.log('Authentication successful:', { username: user.username });
           return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ token: tokenData, user: userData }),
+            body: JSON.stringify({ token, user }),
           };
         }
 
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ token: tokenData }),
-        };
+        if (refresh_token) {
+          const token = await refreshToken(refresh_token, clientId, clientSecret);
+          console.log('Token refresh successful');
+          
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ token }),
+          };
+        }
       }
 
       default:
