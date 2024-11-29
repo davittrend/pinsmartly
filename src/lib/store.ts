@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ref, set, get, child } from 'firebase/database';
-import { database, auth } from './firebase';  // Add auth import here
+import { ref, set } from 'firebase/database';
+import { database } from './firebase';
+import { auth } from './firebase';
 import type { PinterestAccount, PinterestBoard } from '@/types/pinterest';
 
 interface AccountStore {
@@ -14,21 +15,25 @@ interface AccountStore {
   setBoards: (accountId: string, boards: PinterestBoard[]) => Promise<void>;
 }
 
+const initialState = {
+  accounts: [] as PinterestAccount[],
+  selectedAccountId: null,
+  boards: {} as Record<string, PinterestBoard[]>,
+};
+
 export const useAccountStore = create<AccountStore>()(
   persist(
     (set, get) => ({
-      accounts: [],
-      selectedAccountId: null,
-      boards: {},
+      ...initialState,
       addAccount: async (account) => {
         const userId = auth.currentUser?.uid;
         if (!userId) throw new Error('User not authenticated');
 
         // Save to Firebase
         await set(ref(database, `users/${userId}/accounts/${account.id}`), account);
-
+        
         set((state) => ({
-          accounts: [...state.accounts, account],
+          accounts: [...(state.accounts || []), account],
           selectedAccountId: state.selectedAccountId || account.id,
         }));
       },
@@ -38,9 +43,9 @@ export const useAccountStore = create<AccountStore>()(
 
         // Remove from Firebase
         await set(ref(database, `users/${userId}/accounts/${accountId}`), null);
-
+        
         set((state) => ({
-          accounts: state.accounts.filter((a) => a.id !== accountId),
+          accounts: (state.accounts || []).filter((a) => a.id !== accountId),
           selectedAccountId:
             state.selectedAccountId === accountId
               ? state.accounts[0]?.id || null
@@ -59,10 +64,10 @@ export const useAccountStore = create<AccountStore>()(
 
         // Save to Firebase
         await set(ref(database, `users/${userId}/boards/${accountId}`), boards);
-
+        
         set((state) => ({
           boards: {
-            ...state.boards,
+            ...(state.boards || {}),
             [accountId]: boards,
           },
         }));
@@ -70,6 +75,7 @@ export const useAccountStore = create<AccountStore>()(
     }),
     {
       name: 'pinterest-accounts',
+      version: 1,
     }
   )
 );
