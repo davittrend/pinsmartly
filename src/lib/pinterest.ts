@@ -3,7 +3,9 @@ import type { PinterestBoard, PinterestToken, PinterestUser, ScheduledPin } from
 
 const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
 const CLIENT_ID = '1507772';
-const REDIRECT_URI = window.location.origin + '/callback';
+const REDIRECT_URI = typeof window !== 'undefined' 
+  ? `${window.location.origin}/dashboard/accounts`
+  : 'http://localhost:5173/dashboard/accounts';
 
 export async function getPinterestAuthUrl() {
   const scope = 'boards:read,pins:read,pins:write,user_accounts:read,boards:write';
@@ -16,23 +18,22 @@ export async function exchangePinterestCode(code: string): Promise<{ token: Pint
     headers: {
       'Content-Type': 'application/json',
     },
-    credentials: 'include',
   });
 
   if (!response.ok) {
-    throw new Error('Failed to exchange Pinterest code');
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to exchange Pinterest code');
   }
 
   return response.json();
 }
 
 export async function refreshPinterestToken(refreshToken: string): Promise<PinterestToken> {
-  const response = await fetch('/.netlify/functions/pinterest?path=/token&refresh_token=' + refreshToken, {
+  const response = await fetch(`/.netlify/functions/pinterest?path=/token&refresh_token=${refreshToken}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
     },
-    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -45,12 +46,13 @@ export async function refreshPinterestToken(refreshToken: string): Promise<Pinte
 export async function fetchPinterestBoards(accessToken: string): Promise<PinterestBoard[]> {
   const response = await fetch(`${PINTEREST_API_URL}/boards`, {
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${accessToken}`,
     },
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch Pinterest boards');
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to fetch Pinterest boards');
   }
 
   const data = await response.json();
