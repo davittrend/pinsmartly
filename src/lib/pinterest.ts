@@ -1,5 +1,5 @@
 import { auth } from './firebase';
-import type { PinterestBoard, PinterestToken, PinterestUser } from '@/types/pinterest';
+import type { PinterestBoard, PinterestToken, PinterestUser, ScheduledPin } from '@/types/pinterest';
 
 const PINTEREST_API_URL = 'https://api-sandbox.pinterest.com/v5';
 const CLIENT_ID = '1507772';
@@ -55,4 +55,23 @@ export async function fetchPinterestBoards(accessToken: string): Promise<Pintere
 
   const data = await response.json();
   return data.items;
+}
+
+export async function schedulePin(pin: ScheduledPin): Promise<void> {
+  const userId = auth.currentUser?.uid;
+  if (!userId) throw new Error('User not authenticated');
+
+  const response = await fetch('/.netlify/functions/pin-scheduler', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${userId}`,
+    },
+    body: JSON.stringify([pin]),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to schedule pin');
+  }
 }
