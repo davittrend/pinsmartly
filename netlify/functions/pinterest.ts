@@ -22,6 +22,10 @@ export const handler: Handler = async (event) => {
   const path = event.queryStringParameters?.path;
 
   try {
+    if (!clientId || !clientSecret) {
+      throw new Error('Pinterest client credentials not configured');
+    }
+
     switch (path) {
       case '/oauth/url': {
         const scope = 'boards:read,pins:read,pins:write,user_accounts:read,boards:write';
@@ -59,6 +63,7 @@ export const handler: Handler = async (event) => {
         const tokenData = await tokenResponse.json();
         
         if (!tokenResponse.ok) {
+          console.error('Pinterest token error:', tokenData);
           throw new Error(tokenData.error_description || tokenData.error || 'Token exchange failed');
         }
 
@@ -70,6 +75,7 @@ export const handler: Handler = async (event) => {
           const userData = await userResponse.json();
           
           if (!userResponse.ok) {
+            console.error('Pinterest user error:', userData);
             throw new Error(userData.message || 'Failed to fetch user data');
           }
 
