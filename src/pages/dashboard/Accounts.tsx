@@ -1,18 +1,14 @@
-import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { getPinterestAuthUrl, exchangePinterestCode, fetchPinterestBoards } from '@/lib/pinterest';
+import { getPinterestAuthUrl, fetchPinterestBoards } from '@/lib/pinterest';
 import { useAccountStore } from '@/lib/store';
-import { PinterestAccount } from '@/types/pinterest';
 import { toast } from 'sonner';
 import { Trash2, RefreshCw } from 'lucide-react';
 
 export function Accounts() {
-  const location = useLocation();
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { accounts, selectedAccountId, boards, addAccount, removeAccount, setSelectedAccount, setBoards } = useAccountStore();
+  const { accounts, selectedAccountId, boards, removeAccount, setSelectedAccount, setBoards } = useAccountStore();
 
   const handleConnectPinterest = async () => {
     try {
@@ -53,52 +49,6 @@ export function Accounts() {
       setIsRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    const handleCallback = async () => {
-      const searchParams = new URLSearchParams(location.search);
-      const code = searchParams.get('code');
-      
-      if (code) {
-        try {
-          setIsLoading(true);
-          const { token, user } = await exchangePinterestCode(code);
-          
-          const newAccount: PinterestAccount = {
-            id: user.username,
-            user,
-            token,
-            lastRefreshed: Date.now(),
-          };
-          
-          await addAccount(newAccount);
-          
-          // Fetch boards for the new account
-          const boards = await fetchPinterestBoards(token.access_token);
-          await setBoards(newAccount.id, boards);
-          
-          // Clear the URL
-          window.history.replaceState({}, '', '/dashboard/accounts');
-          toast.success('Pinterest account connected successfully!');
-        } catch (error) {
-          console.error('Error handling Pinterest callback:', error);
-          toast.error('Failed to connect Pinterest account');
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    handleCallback();
-  }, [location.search]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
