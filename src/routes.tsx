@@ -4,7 +4,7 @@ import { SignIn } from '@/pages/auth/SignIn';
 import { SignUp } from '@/pages/auth/SignUp';
 import { Dashboard } from '@/pages/Dashboard';
 import { AuthGuard } from '@/components/auth/AuthGuard';
-import { PinterestCallback } from '@/pages/auth/PinterestCallback';  // Add this import
+import { PinterestCallback } from '@/pages/auth/PinterestCallback';
 
 export const routes: RouteObject[] = [
   {
@@ -20,8 +20,12 @@ export const routes: RouteObject[] = [
     element: <SignUp />,
   },
   {
-    path: '/callback',  // Add the callback route
-    element: <PinterestCallback />,
+    path: '/callback',
+    element: (
+      <AuthGuard>
+        <PinterestCallback />
+      </AuthGuard>
+    ),
   },
   {
     path: '/dashboard/*',
