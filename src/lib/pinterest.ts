@@ -4,11 +4,12 @@ import type { PinterestBoard, PinterestToken, PinterestUser, ScheduledPin } from
 const CLIENT_ID = '1507772';
 const REDIRECT_URI = typeof window !== 'undefined' 
   ? `${window.location.origin}/callback`
-  : 'http://localhost:5173/callback';
+  : '';
 
 export async function getPinterestAuthUrl() {
   const scope = 'boards:read,pins:read,pins:write,user_accounts:read,boards:write';
-  return `https://www.pinterest.com/oauth/?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=${scope}&state=sandbox`;
+  const state = 'sandbox';
+  return `https://www.pinterest.com/oauth/?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=${scope}&state=${state}`;
 }
 
 export async function exchangePinterestCode(code: string): Promise<{ token: PinterestToken; user: PinterestUser }> {
@@ -16,11 +17,13 @@ export async function exchangePinterestCode(code: string): Promise<{ token: Pint
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
+      'Origin': window.location.origin,
     },
   });
 
   if (!response.ok) {
     const error = await response.json();
+    console.error('Token exchange error:', error);
     throw new Error(error.message || 'Failed to exchange Pinterest code');
   }
 
@@ -32,6 +35,7 @@ export async function refreshPinterestToken(refreshToken: string): Promise<Pinte
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
+      'Origin': window.location.origin,
     },
   });
 
@@ -48,6 +52,7 @@ export async function fetchPinterestBoards(accessToken: string): Promise<Pintere
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
+      'Origin': window.location.origin,
     },
   });
 
@@ -68,6 +73,7 @@ export async function schedulePin(pin: ScheduledPin): Promise<void> {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${userId}`,
+      'Origin': window.location.origin,
     },
     body: JSON.stringify([pin]),
   });
